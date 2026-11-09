@@ -2,8 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 import { createGroq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 
-const GEMINI_TIMEOUT_MS = 25_000;
-const GROQ_TIMEOUT_MS = 25_000;
+const GEMINI_TIMEOUT_MS = 20_000;
+const GROQ_TIMEOUT_MS = 20_000;
 
 const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 const groqApiKey = process.env.GROQ_API_KEY?.trim();
@@ -13,7 +13,6 @@ const gemini = geminiApiKey
       apiKey: geminiApiKey,
       httpOptions: {
         timeout: GEMINI_TIMEOUT_MS,
-        // Avoid the SDK's long default retry window. We have our own model fallback.
         retryOptions: { attempts: 1 },
       },
     })
@@ -21,21 +20,39 @@ const gemini = geminiApiKey
 
 const groq = groqApiKey ? createGroq({ apiKey: groqApiKey }) : null;
 
+function safeDiagnostic(cause) {
+  let message = String(cause?.message || cause || "Unknown provider error");
+  for (const secret of [geminiApiKey, groqApiKey].filter(Boolean)) {
+    message = message.split(secret).join("[REDACTED]");
+  }
+  return message
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
+    .replace(/gsk_[0-9A-Za-z_-]{12,}/g, "[REDACTED]")
+    .replace(/(authorization\s*[:=]\s*bearer\s+)\S+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:key|api_key|token)=)[^&\s]+/gi, "$1[REDACTED]")
+    .slice(0, 320);
+}
+
 function getStatus(cause) {
-  const status = Number(cause?.status ?? cause?.statusCode ?? cause?.response?.status);
-  return Number.isInteger(status) ? status : null;
+  const direct = Number(cause?.status ?? cause?.statusCode ?? cause?.response?.status);
+  if (Number.isInteger(direct) && direct >= 100 && direct <= 599) return direct;
+  const match = safeDiagnostic(cause).match(/(?:http\s*)?(?:status(?:\s*code)?\s*[:=]?\s*|error\s*[:=]?\s*)([1-5]\d\d)/i);
+  return match ? Number(match[1]) : null;
 }
 
 function getFailureKind(cause) {
   const status = getStatus(cause);
-  const message = String(cause?.message || "").toLowerCase();
+  const message = safeDiagnostic(cause).toLowerCase();
 
   if (
     status === 401 ||
     status === 403 ||
     message.includes("invalid api key") ||
     message.includes("api key not valid") ||
-    message.includes("unauthorized")
+    message.includes("api_key_invalid") ||
+    message.includes("unauthorized") ||
+    message.includes("unauthenticated") ||
+    message.includes("permission denied")
   ) return "auth";
 
   if (
@@ -52,10 +69,16 @@ function getFailureKind(cause) {
     message.includes("unavailable") ||
     message.includes("timeout") ||
     message.includes("timed out") ||
-    message.includes("aborted")
+    message.includes("aborted") ||
+    cause?.name === "AbortError" ||
+    cause?.name === "TimeoutError"
   ) return "temporary";
 
-  if (status === 404 || message.includes("model not found")) return "model";
+  if (
+    status === 404 ||
+    message.includes("model not found") ||
+    message.includes("no longer available")
+  ) return "model";
 
   return "other";
 }
@@ -63,12 +86,14 @@ function getFailureKind(cause) {
 function providerError(provider, cause) {
   const kind = getFailureKind(cause);
   const status = getStatus(cause);
+  const diagnostic = safeDiagnostic(cause);
 
-  // Log only error metadata. Never log API keys, request headers, or full SDK objects.
+  // Diagnostics are redacted and truncated; never log request headers or SDK objects.
   console.error(`[${provider}] request failed`, {
     kind,
     status: status ?? "unknown",
     errorName: cause?.name || "Error",
+    diagnostic,
   });
 
   let message;
@@ -79,7 +104,7 @@ function providerError(provider, cause) {
   } else if (provider === "gemini" && kind === "auth") {
     message = "Gemini rejected the configured API key. Check GEMINI_API_KEY in Vercel.";
   } else if (provider === "gemini" && kind === "quota") {
-    message = "Gemini's API quota or rate limit was reached. Check the Google AI Studio limits and try again.";
+    message = "Gemini's API quota or rate limit was reached. Check Google AI Studio limits and try again.";
   } else if (provider === "gemini" && kind === "temporary") {
     message = "Gemini is temporarily busy. Warren AI tried its lighter fallback model, but it could not complete the request.";
   } else if (kind === "temporary") {
@@ -95,8 +120,8 @@ function providerError(provider, cause) {
 }
 
 function canTryGeminiFallback(cause) {
-  const kind = getFailureKind(cause);
-  return kind === "temporary" || kind === "quota" || kind === "model";
+  // Never retry authentication failures with another model; other failures may be model-specific.
+  return getFailureKind(cause) !== "auth";
 }
 
 async function requestGeminiModel(messages, model) {
@@ -132,7 +157,7 @@ async function generateWithGemini(messages) {
       return await requestGeminiModel(messages, model);
     } catch (cause) {
       lastError = cause;
-      console.warn(`[gemini] model attempt failed`, {
+      console.warn("[gemini] model attempt failed", {
         model,
         kind: getFailureKind(cause),
         status: getStatus(cause) ?? "unknown",
