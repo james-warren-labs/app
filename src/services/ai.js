@@ -7,24 +7,29 @@ const gemini = process.env.GEMINI_API_KEY
 const groq = process.env.GROQ_API_KEY
   ? createGroq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
-export async function generateReply({ message, provider = "auto" }) {
+export async function generateReply({ messages, provider = "auto" }) {
   const selected = provider === "auto" ? (gemini ? "gemini" : groq ? "groq" : null) : provider;
   if (!selected || (selected === "gemini" && !gemini) || (selected === "groq" && !groq)) {
     const error = new Error("The selected AI provider is not configured on the server.");
     error.status = 503;
     throw error;
   }
+
   try {
     if (selected === "gemini") {
       const response = await gemini.models.generateContent({
         model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-        contents: message,
+        contents: messages.map(({ role, content }) => ({
+          role,
+          parts: [{ text: content }],
+        })),
       });
       return { provider: "gemini", text: response.text || "" };
     }
+
     const { text } = await generateText({
       model: groq(process.env.GROQ_MODEL || "llama-3.3-70b-versatile"),
-      prompt: message,
+      messages: messages.map(({ role, content }) => ({ role, content })),
     });
     return { provider: "groq", text };
   } catch (cause) {
