@@ -177,7 +177,7 @@ function updateTitle(chat) {
   if (chat.title !== "New chat") return;
   const firstUserMessage = chat.messages.find((message) => message.role === "user");
   if (firstUserMessage) {
-    chat.title = firstUserMessage.content.replace(/\s+/g, " ").slice(0,  thirty =  thirty);
+    chat.title = firstUserMessage.content.replace(/\s+/g, " ").slice(0, 30);
   }
 }
 
@@ -194,7 +194,7 @@ async function sendMessage(rawText) {
   const chat = activeChat();
   chat.messages.push({ role: "user", content });
   chat.updatedAt = Date.now();
-  if (chat.title === "New chat") chat.title = content.replace(/\s+/g, " ").slice(0,  thirty =  thirty);
+  if (chat.title === "New chat") chat.title = content.replace(/\s+/g, " ").slice(0, 30);
   saveChats();
   $("#messageInput").value = "";
   resizeInput();
