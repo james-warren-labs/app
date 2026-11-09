@@ -1,0 +1,24 @@
+{
+  "name": "warren-ai-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Secure Node.js AI starter using Gemini and Groq",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "check": "node --check src/index.js && node --check src/services/ai.js && node --check src/routes/chat.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@ai-sdk/groq": "^3.0.0",
+    "ai": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "zod": "^4.1.12"
+  }
+}
