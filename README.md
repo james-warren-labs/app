@@ -1,19 +1,21 @@
-# Warren AI App
+# Warren AI
 
-A clean Node.js API foundation for a web or mobile AI application, with Google Gemini and Groq providers.
+A responsive AI chat application for desktop and mobile, powered by a Node.js API with Google Gemini and Groq.
 
-## Included
+## Features
 
-- Express 5 API
-- Official Google GenAI JavaScript SDK (`@google/genai`)
-- Groq provider through Vercel AI SDK (`ai`, `@ai-sdk/groq`)
-- Select provider with `auto`, `gemini`, or `groq`
-- Zod request validation, Helmet headers, CORS allow-list, and rate limiting
-- API keys stay on the backend
+- Responsive chat interface with dark and light themes
+- New conversations and chat history saved locally in the current browser
+- Conversation context sent with each request (up to the latest 20 messages)
+- Choose Auto, Gemini, or Groq as the model provider
+- Copy assistant responses
+- Express 5 API, Zod validation, Helmet, CORS allow-list, and request rate limiting
+- Provider API keys stay on the server
 
 ## Requirements
 
-Node.js 20+ and at least one provider API key.
+- Node.js 20+
+- At least one provider API key
 
 ## Run locally
 
@@ -22,50 +24,52 @@ npm install
 cp .env.example .env
 ```
 
-Put your API key(s) in `.env`, then run:
+Add your provider key(s) to `.env`, then run:
 
 ```bash
 npm run dev
 ```
 
-The API listens on port 3000 by default.
+Open http://localhost:3000.
 
-## Endpoints
+## Environment
+
+```env
+PORT=3000
+CORS_ORIGIN=http://localhost:3000
+GEMINI_API_KEY=
+GROQ_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+Use the exact model IDs available in your provider account. Never put API keys in frontend files or commit a real `.env` file.
+
+## API
 
 - `GET /health` — health check
-- `POST /api/chat` — generate a response
+- `POST /api/chat` — chat completion
 
-Example request:
+Example:
 
 ```json
 {
-  "message": "Explain photosynthesis in simple words",
+  "messages": [
+    { "role": "user", "content": "Hello!" }
+  ],
   "provider": "auto"
 }
 ```
 
-Example response:
+The `provider` value can be `auto`, `gemini`, or `groq`. Auto prefers Gemini when configured, then Groq. The backend accepts up to 20 conversation messages.
 
-```json
-{
-  "provider": "gemini",
-  "text": "..."
-}
-```
-
-In auto mode Gemini is preferred when configured; Groq is used if Gemini is not configured.
-
-## Test with curl
-
-```bash
-curl -X POST http://localhost:3000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Hello!","provider":"auto"}'
-```
-
-## Structure
+## Project structure
 
 ```text
+public/
+  index.html
+  styles.css
+  app.js
 src/
   index.js
   routes/chat.js
@@ -76,13 +80,12 @@ package.json
 README.md
 ```
 
-## Security before production
+## Notes
 
-- Never commit `.env` or API keys.
-- Keep AI calls on the backend; the client should call your API.
-- Set `CORS_ORIGIN` to your actual frontend origin(s).
-- The built-in in-memory rate limiter is for a single server instance. Use a shared store such as Redis when horizontally scaling.
-- Add authentication and per-user quotas before exposing the API publicly.
+- Conversation history is stored in browser localStorage on that device; it is not synced across devices or stored in a server database.
+- The in-memory rate limiter is intended for one server instance. Use a shared store for multi-instance deployments.
+- Add authentication, per-user usage limits, and a persistent database before making the service public.
+- Configure `CORS_ORIGIN` with your real frontend origin(s) when deploying.
 
 ## Official references
 
