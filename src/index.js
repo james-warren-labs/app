@@ -15,6 +15,8 @@ const allowedOrigins = (process.env.CORS_ORIGIN || "")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
 
 app.disable("x-powered-by");
+// Vercel terminates the public connection and forwards the client IP.
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({
   origin(origin, callback) {
@@ -42,7 +44,7 @@ app.get("/", (_req, res) => res.sendFile(path.join(publicDir, "index.html")));
 app.use((err, _req, res, _next) => {
   console.error("Request error:", err.message);
   const status = Number.isInteger(err.status) ? err.status : 500;
-  res.status(status).json({ error: status >= 500 ? (err.message || "Internal server error") : err.message });
+  res.status(status).json({ error: status >= 500 ? (err.expose === true ? err.message : "Internal server error") : err.message });
 });
 
 app.listen(port, () => console.log(`Warren AI App listening on port ${port}`));
