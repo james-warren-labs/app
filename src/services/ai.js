@@ -18,7 +18,7 @@ function providerError(provider, cause) {
 
 async function generateWithGemini(messages) {
   const response = await gemini.models.generateContent({
-    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
     contents: messages.map(({ role, content }) => ({
       role: role === "assistant" ? "model" : "user",
       parts: [{ text: content }],
